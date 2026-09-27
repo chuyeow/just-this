@@ -41,10 +41,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP"
+# Re-register so Finder/Dock pick up a changed icon instead of a cached one.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP"
 echo "Built $APP"
 
 if [[ "${1:-}" == "--install" ]]; then
   rm -rf "/Applications/Just This.app"
   cp -R "$APP" /Applications/
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Just This.app"
   echo "Installed /Applications/Just This.app"
 fi
