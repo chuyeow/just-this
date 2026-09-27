@@ -184,23 +184,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         dot.layer?.backgroundColor = accent
         dot.layer?.shadowColor = accent
         pill.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.15).cgColor
-
-        let calm = defaults.bool(forKey: Setting.breathe) && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        calm ? breathe(accent: NSColor(t.accent)) : stopBreathing()
     }
 
-    /// A slow inhale/exhale: the dot's glow swells and the rim warms, ~10 breaths a minute.
-    private func breathe(accent: NSColor) {
+    /// A slow inhale/exhale, ~10 breaths a minute. The whole pill swells a touch and brightens,
+    /// the dot's glow blooms and the rim warms. Scale never exceeds 1 so the window never clips it.
+    /// Re-run after every layout: the scale pivots on the pill's centre, which moves with its size.
+    private func updateBreathing() {
+        stopBreathing()
+        guard defaults.bool(forKey: Setting.breathe), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        let accent = NSColor(Themes.named(defaults.string(forKey: Setting.theme)).accent)
         func wave(_ key: String, _ from: Any, _ to: Any) -> CABasicAnimation {
             let a = CABasicAnimation(keyPath: key)
             a.fromValue = from
             a.toValue = to
             return a
         }
+        let b = pill.bounds
+        var exhale = CATransform3DMakeTranslation(b.midX, b.midY, 0)
+        exhale = CATransform3DScale(exhale, 0.965, 0.965, 1)
+        exhale = CATransform3DTranslate(exhale, -b.midX, -b.midY, 0)
+
         let dotBreath = CAAnimationGroup()
         dotBreath.animations = [wave("opacity", 0.55, 1.0), wave("shadowRadius", 1.0, 8.0), wave("shadowOpacity", 0.4, 1.0)]
-        let rim = wave("borderColor", accent.withAlphaComponent(0.08).cgColor, accent.withAlphaComponent(0.5).cgColor)
-        for (layer, anim) in [(dot.layer, dotBreath as CAAnimation), (pill.layer, rim)] {
+        let pillBreath = CAAnimationGroup()
+        pillBreath.animations = [
+            wave("transform", NSValue(caTransform3D: exhale), NSValue(caTransform3D: CATransform3DIdentity)),
+            wave("opacity", 0.8, 1.0),
+            wave("borderColor", accent.withAlphaComponent(0.08).cgColor, accent.withAlphaComponent(0.5).cgColor),
+        ]
+        for (layer, anim) in [(dot.layer, dotBreath), (pill.layer, pillBreath)] {
             anim.duration = 3
             anim.autoreverses = true
             anim.repeatCount = .infinity
@@ -236,6 +248,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         home = placeHome(center: center, size: size, screens: screens)
         target = wasDodged ? placeHome(center: CGPoint(x: target.midX, y: target.midY), size: size, screens: screens) : home
         panel.setFrame(target, display: true)
+        pill.layoutSubtreeIfNeeded()
+        updateBreathing()
     }
 
     // MARK: Dodge loop

@@ -128,7 +128,13 @@ struct DockThemeBreathTests {
     @Test func breathesUnlessTurnedOff() {
         let d = launch()
         #expect(d.dot.layer?.animation(forKey: "breathe") != nil)
+        // The whole pill breathes: it swells gently (scale) and brightens (opacity), not just the dot.
+        let whole = d.pill.layer?.animation(forKey: "breathe") as? CAAnimationGroup
+        let keys = whole?.animations?.compactMap { ($0 as? CAPropertyAnimation)?.keyPath } ?? []
+        #expect(keys.contains("transform"))
+        #expect(keys.contains("opacity"))
         defaults.set(false, forKey: Setting.breathe)
         #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
+        #expect(d.pill.layer?.animation(forKey: "breathe") == nil)
     }
 }

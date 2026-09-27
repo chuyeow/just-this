@@ -58,7 +58,8 @@ struct SettingsView: View {
                 LabeledContent("Theme") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
                         ForEach(Themes.all) { t in
-                            ThemeSwatch(theme: t, selected: t.id == theme).onTapGesture { theme = t.id }
+                            Button { theme = t.id } label: { ThemeSwatch(theme: t, selected: t.id == theme) }
+                                .buttonStyle(.plain)
                         }
                     }
                     .frame(width: 290)
@@ -126,7 +127,7 @@ private struct ThemeSwatch: View {
         .overlay(Capsule().strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: selected ? 2 : 1))
         .contentShape(Capsule())
         .accessibilityLabel("\(theme.name) theme")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
