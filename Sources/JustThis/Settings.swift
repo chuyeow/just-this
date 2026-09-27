@@ -5,8 +5,9 @@ import SwiftUI
 /// UserDefaults keys. The shell reads them; the settings window writes them via @AppStorage.
 enum Setting {
     static let focus = "focus"
-    static let homeX = "homeX"
-    static let homeY = "homeY"
+    /// Resting centre as [x, y]. One key so a move is a single write: separate x/y keys let the
+    /// change observer lay out between the two writes and pull the pill to a half-updated spot.
+    static let home = "homeCenter"
     static let dodgeEnabled = "dodgeEnabled"
     static let dodgeDistance = "dodgeDistance"
     static let showReachHint = "showReachHint"

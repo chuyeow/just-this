@@ -82,7 +82,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
-        for sub in [appMenu, edit] {
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        window.addItem(withTitle: "Minimize", action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
+        NSApp.windowsMenu = window
+        for sub in [appMenu, edit, window] {
             let item = NSMenuItem()
             item.submenu = sub
             main.addItem(item)
@@ -151,6 +155,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         ])
         pill.onDoubleClick = { [weak self] in self?.beginEditing() }
         pill.onMoved = { [weak self] in self?.saveHome() }
+        panel.onSettingsShortcut = { [weak self] in self?.openSettings() }
         panel.contentView = pill
         tint.frame = pill.bounds
     }
@@ -165,8 +170,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             w.center()
             settingsWindow = w
         }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
+        settingsWindow?.orderFrontRegardless() // visible even if macOS declines to activate us
     }
 
     private func applySettings() {
@@ -244,8 +250,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let wasDodged = target != home
         let screens = NSScreen.screens.map(\.frame)
         let center: CGPoint
-        if defaults.object(forKey: Setting.homeX) != nil {
-            center = CGPoint(x: defaults.double(forKey: Setting.homeX), y: defaults.double(forKey: Setting.homeY))
+        if let saved = defaults.array(forKey: Setting.home) as? [Double], saved.count == 2 {
+            center = CGPoint(x: saved[0], y: saved[1])
         } else {
             let vf = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
             center = CGPoint(x: vf.midX, y: vf.maxY - 10 - height / 2)
@@ -260,6 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     // MARK: Dodge loop
 
     func tick(cursor: CGPoint, optionHeld: Bool, now: Double) {
+        if pill.isDragging { return }
         if let shown = hintShownAt, optionHeld || now - shown > 3 { hideHint() }
 
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: home.midX, y: home.midY)) } ?? NSScreen.main
@@ -295,8 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         guard panel.frame != home else { return }
         home = panel.frame
         target = home
-        defaults.set(home.midX, forKey: Setting.homeX)
-        defaults.set(home.midY, forKey: Setting.homeY)
+        defaults.set([home.midX, home.midY], forKey: Setting.home)
     }
 
     @objc func beginEditing() {
@@ -305,7 +311,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         pill.isEditing = true
         field.isEditable = true
         field.isSelectable = true
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(field)
         field.currentEditor()?.selectAll(nil)
@@ -336,8 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     func controlTextDidEndEditing(_ note: Notification) { endEditing(commit: true) }
 
     private func resetPosition() {
-        defaults.removeObject(forKey: Setting.homeX)
-        defaults.removeObject(forKey: Setting.homeY)
+        defaults.removeObject(forKey: Setting.home)
         layout()
     }
 }

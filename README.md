@@ -8,7 +8,7 @@ A tiny pill that floats above every window, on every Space, showing your one cur
 - **Rest anywhere**: ⌥-drag it to any spot on any display; it stays there across launches and is pulled back on-screen if a display goes away.
 - **Breathes**: the whole pill swells and brightens slowly, the dot's glow blooming with it (~10 breaths a minute). Off in Settings, and automatically under Reduce Motion.
 - **Themes**: Dawn (default, apricot-to-lilac gradient), Paper, Ember, Ocean, Forest, Gold (black and gold). Every theme is tested for readable contrast (WCAG 4.5:1 text, 3:1 dot).
-- **Settings** (⌘, or Dock/right-click › Settings…): theme, breathing, slide-away on/off and distance, the hint on/off, text size, opacity, reset position, open at login.
+- **Settings** (⌘, after clicking the pill or while the app is in front; or Dock/right-click › Settings…): theme, breathing, slide-away on/off and distance, the hint on/off, text size, opacity, reset position, open at login.
 - Lives in the Dock. Right-click the Dock icon for Edit Focus / Settings; ⌘Q quits.
 
 ## Build
