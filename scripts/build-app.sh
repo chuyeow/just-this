@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Build "Just This.app" into build/. Usage: scripts/build-app.sh [--install]  (--install copies to /Applications)
+# VERSION (default 1.0) and BUILD (default 1) set the bundle version; CI passes them.
 set -euo pipefail
+VERSION="${VERSION:-1.0}"
+BUILD="${BUILD:-1}"
 cd "$(dirname "$0")/.."
 
 swift build -c release --arch arm64 --arch x86_64
@@ -32,8 +35,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>JustThis</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
