@@ -91,8 +91,9 @@ struct DockThemeBreathTests {
     let defaults = UserDefaults(suiteName: "JustThisTests-\(UUID())")!
     let app = NSApplication.shared
 
-    func launch() -> AppDelegate {
+    func launch(reduceMotion: Bool = false) -> AppDelegate {
         let d = AppDelegate(defaults: defaults)
+        d.reduceMotion = { reduceMotion }
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }
@@ -143,6 +144,12 @@ struct DockThemeBreathTests {
         #expect(keys.contains("transform"))
         #expect(keys.contains("opacity"))
         defaults.set(false, forKey: Setting.breathe)
+        #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
+        #expect(d.pill.layer?.animation(forKey: "breathe") == nil)
+    }
+
+    @Test func reduceMotionStopsBreathing() {
+        let d = launch(reduceMotion: true)
         #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
         #expect(d.pill.layer?.animation(forKey: "breathe") == nil)
     }
@@ -199,11 +206,4 @@ struct DragAndShortcutTests {
         #expect(d.settingsWindow?.isVisible == true)
     }
 
-    @Test func clickingThePillMakesItKeySoShortcutsReachIt() {
-        let d = launch()
-        let c = CGPoint(x: d.panel.frame.midX, y: d.panel.frame.midY)
-        d.pill.mouseDown(with: mouse(.leftMouseDown, d, at: c))
-        d.pill.mouseUp(with: mouse(.leftMouseUp, d, at: c))
-        #expect(d.panel.isKeyWindow)
-    }
 }

@@ -21,6 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var hintShownAt: Double?
     private var timer: Timer?
 
+    /// Injected so tests don't depend on the machine's Reduce Motion setting (CI runners have it on).
+    var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         defaults.register(defaults: Setting.defaults)
@@ -202,7 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     /// Re-run after every layout: the scale pivots on the pill's centre, which moves with its size.
     private func updateBreathing() {
         stopBreathing()
-        guard defaults.bool(forKey: Setting.breathe), !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return }
+        guard defaults.bool(forKey: Setting.breathe), !reduceMotion() else { return }
         let accent = NSColor(Themes.named(defaults.string(forKey: Setting.theme)).accent)
         func wave(_ key: String, _ from: Any, _ to: Any) -> CABasicAnimation {
             let a = CABasicAnimation(keyPath: key)
