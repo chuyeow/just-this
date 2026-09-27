@@ -9,7 +9,8 @@ public struct RGB: Equatable, Sendable {
     }
 }
 
-/// A pill look: a tint laid over the blur, text, and the breathing dot.
+/// A pill look: a tint laid over the blur (a diagonal gradient when `backgroundEnd` is set),
+/// text, and the breathing dot.
 public struct Theme: Identifiable, Sendable {
     public let id: String
     public let name: String
@@ -18,17 +19,19 @@ public struct Theme: Identifiable, Sendable {
     public let accent: RGB
     /// Dark themes use the dark blur material; light ones the light.
     public let isDark: Bool
+    /// Gradient end, bottom-left `background` to top-right `backgroundEnd`.
+    public var backgroundEnd: RGB? = nil
 }
 
 public enum Themes {
     /// First entry is the default.
     public static let all: [Theme] = [
+        Theme(id: "dawn", name: "Dawn", background: RGB(hex: 0xFBD9BF), text: RGB(hex: 0x2B2140), accent: RGB(hex: 0xC24E1C), isDark: false, backgroundEnd: RGB(hex: 0xDCD3F2)),
         Theme(id: "paper", name: "Paper", background: RGB(hex: 0xF6F1E7), text: RGB(hex: 0x1F1B16), accent: RGB(hex: 0xD9480F), isDark: false),
         Theme(id: "ember", name: "Ember", background: RGB(hex: 0x1C1B1F), text: RGB(hex: 0xFFFFFF), accent: RGB(hex: 0xFF9E1A), isDark: true),
         Theme(id: "ocean", name: "Ocean", background: RGB(hex: 0x0E1F3D), text: RGB(hex: 0xE6F0FF), accent: RGB(hex: 0x4FD1FF), isDark: true),
         Theme(id: "forest", name: "Forest", background: RGB(hex: 0x13261C), text: RGB(hex: 0xEAF3E6), accent: RGB(hex: 0x9BE564), isDark: true),
-        Theme(id: "rose", name: "Rose", background: RGB(hex: 0x2A1420), text: RGB(hex: 0xFFE8F0), accent: RGB(hex: 0xFF6FA3), isDark: true),
-        Theme(id: "mono", name: "Mono", background: RGB(hex: 0x000000), text: RGB(hex: 0xFFFFFF), accent: RGB(hex: 0xFFFFFF), isDark: true),
+        Theme(id: "gold", name: "Gold", background: RGB(hex: 0x0B0B0B), text: RGB(hex: 0xF2C94C), accent: RGB(hex: 0xFFD60A), isDark: true),
     ]
 
     public static var `default`: Theme { all[0] }

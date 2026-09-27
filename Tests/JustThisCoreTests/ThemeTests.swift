@@ -1,14 +1,24 @@
 import Testing
 @testable import JustThisCore
 
+/// Gradient themes must be readable at both ends.
 @Test(arguments: Themes.all)
 func textIsReadable(_ t: Theme) {
-    #expect(contrastRatio(t.text, t.background) >= 4.5, "\(t.name) text")
+    for bg in [t.background, t.backgroundEnd ?? t.background] {
+        #expect(contrastRatio(t.text, bg) >= 4.5, "\(t.name) text")
+    }
 }
 
 @Test(arguments: Themes.all)
 func dotStandsOut(_ t: Theme) {
-    #expect(contrastRatio(t.accent, t.background) >= 3, "\(t.name) dot")
+    for bg in [t.background, t.backgroundEnd ?? t.background] {
+        #expect(contrastRatio(t.accent, bg) >= 3, "\(t.name) dot")
+    }
+}
+
+@Test func themeLineup() {
+    #expect(Themes.all.map(\.id) == ["dawn", "paper", "ember", "ocean", "forest", "gold"])
+    #expect(Themes.named("dawn").backgroundEnd != nil)
 }
 
 @Test func themeIdsAreUnique() {
@@ -26,7 +36,8 @@ func dotStandsOut(_ t: Theme) {
     #expect(abs(contrastRatio(RGB(hex: 0x777777), RGB(hex: 0xFFFFFF)) - 4.48) < 0.01)
 }
 
-@Test func paperIsTheDefault() {
-    #expect(Themes.default.id == "paper")
-    #expect(Themes.named(nil).id == "paper")
+@Test func dawnIsTheDefault() {
+    #expect(Themes.default.id == "dawn")
+    #expect(Themes.named(nil).id == "dawn")
+    #expect(Themes.named("rose").id == "dawn") // removed themes fall back
 }

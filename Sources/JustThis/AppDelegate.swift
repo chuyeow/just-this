@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     let field = NSTextField(labelWithString: "")
     let pill = PillView()
     let dot = NSView()
-    private let tint = NSView()
+    let tint = NSView()
     private let menu = NSMenu()
     private var home: CGRect = .zero
     private var target: CGRect = .zero
@@ -122,6 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         pill.layer?.borderWidth = 1
         pill.menu = menu
 
+        tint.layer = CAGradientLayer()
         tint.wantsLayer = true
         tint.autoresizingMask = [.width, .height]
         pill.addSubview(tint)
@@ -178,7 +179,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     private func applyTheme(_ t: Theme) {
         pill.appearance = NSAppearance(named: t.isDark ? .vibrantDark : .vibrantLight)
-        tint.layer?.backgroundColor = NSColor(t.background).withAlphaComponent(0.82).cgColor
+        if let gradient = tint.layer as? CAGradientLayer {
+            gradient.colors = [t.background, t.backgroundEnd ?? t.background].map { NSColor($0).withAlphaComponent(0.82).cgColor }
+            gradient.startPoint = CGPoint(x: 0, y: 0)
+            gradient.endPoint = CGPoint(x: 1, y: 1)
+        }
         field.textColor = NSColor(t.text)
         let accent = NSColor(t.accent).cgColor
         dot.layer?.backgroundColor = accent

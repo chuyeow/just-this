@@ -117,10 +117,13 @@ struct DockThemeBreathTests {
         #expect(actions.contains(#selector(NSApplication.terminate(_:))))
     }
 
-    @Test func freshInstallUsesPaper() {
+    @Test func freshInstallUsesDawnGradient() {
         let d = launch()
-        #expect(d.field.textColor == NSColor(Themes.named("paper").text))
+        let dawn = Themes.named("dawn")
+        #expect(d.field.textColor == NSColor(dawn.text))
         #expect(d.pill.appearance?.name == .vibrantLight)
+        let colors = (d.tint.layer as? CAGradientLayer)?.colors as? [CGColor] ?? []
+        #expect(colors.count == 2 && colors[0] != colors[1])
     }
 
     @Test func themeAppliesLive() {

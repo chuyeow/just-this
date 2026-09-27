@@ -123,7 +123,8 @@ private struct ThemeSwatch: View {
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
-        .background(Capsule().fill(Color(theme.background)))
+        .background(Capsule().fill(LinearGradient(colors: [Color(theme.background), Color(theme.backgroundEnd ?? theme.background)],
+                                                  startPoint: .bottomLeading, endPoint: .topTrailing)))
         .overlay(Capsule().strokeBorder(selected ? Color.accentColor : Color.primary.opacity(0.1), lineWidth: selected ? 2 : 1))
         .contentShape(Capsule())
         .accessibilityLabel("\(theme.name) theme")
