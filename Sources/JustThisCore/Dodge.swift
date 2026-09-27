@@ -20,3 +20,35 @@ public func nextFrame(home: CGRect, current: CGRect, cursor: CGPoint, visible: C
     let preferred = cursor.y >= home.midY ? [down, up] : [up, down]
     return preferred.first { visible.contains($0) } ?? preferred[0]
 }
+
+/// Notices the user repeatedly reaching for the pill (it keeps dodging) so the shell can
+/// suggest holding Option. Fires once per burst, then starts counting afresh.
+public struct ReachTracker {
+    public var threshold: Int
+    public var window: Double
+    private var dodges: [Double] = []
+
+    public init(threshold: Int = 3, window: Double = 4) {
+        self.threshold = threshold
+        self.window = window
+    }
+
+    /// Record a dodge at time `t` (seconds). Returns true when the hint should show.
+    public mutating func recordDodge(at t: Double) -> Bool {
+        dodges = dodges.filter { t - $0 < window } + [t]
+        guard dodges.count >= threshold else { return false }
+        dodges = []
+        return true
+    }
+}
+
+/// The pill's resting frame: centred on `center`, on the screen that contains it (else the
+/// first screen), pulled fully on-screen so a drag or an unplugged display can't lose it.
+public func placeHome(center: CGPoint, size: CGSize, screens: [CGRect]) -> CGRect {
+    guard let screen = screens.first(where: { $0.contains(center) }) ?? screens.first else {
+        return CGRect(origin: center, size: size)
+    }
+    let x = min(max(center.x - size.width / 2, screen.minX), screen.maxX - size.width)
+    let y = min(max(center.y - size.height / 2, screen.minY), screen.maxY - size.height)
+    return CGRect(x: x, y: y, width: size.width, height: size.height)
+}

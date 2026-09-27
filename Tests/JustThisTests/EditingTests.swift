@@ -28,6 +28,8 @@ struct EditingTests {
         #expect(d.field.stringValue == "Ship Just This")
         #expect(defaults.string(forKey: "focus") == "Ship Just This")
         #expect(!d.field.isEditable)
+        // Handing focus back to the previous app must not hide the pill with it.
+        #expect(d.panel.isVisible)
     }
 
     @Test func escapeCancelsAndKeepsOldFocus() throws {

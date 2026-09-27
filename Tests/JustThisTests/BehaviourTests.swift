@@ -1,0 +1,86 @@
+import AppKit
+import Testing
+@testable import JustThis
+
+/// Drives the real shell's tick with a fake cursor/clock, and settings through UserDefaults.
+@MainActor
+struct BehaviourTests {
+    let defaults = UserDefaults(suiteName: "JustThisTests-\(UUID())")!
+    let app = { let a = NSApplication.shared; a.setActivationPolicy(.accessory); return a }()
+
+    func launch() -> AppDelegate {
+        defaults.set("Write the memo", forKey: Setting.focus)
+        let d = AppDelegate(defaults: defaults)
+        d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        return d
+    }
+
+    var far: CGPoint { CGPoint(x: 5, y: 5) }
+
+    @Test func dodgesThenReturns() {
+        let d = launch()
+        let home = d.panel.frame
+        d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: false, now: 0)
+        #expect(d.panel.frame != home)
+        d.tick(cursor: far, optionHeld: false, now: 0.5)
+        #expect(d.panel.frame == home)
+    }
+
+    @Test func dodgeCanBeTurnedOff() {
+        let d = launch()
+        defaults.set(false, forKey: Setting.dodgeEnabled)
+        let home = d.panel.frame
+        d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: false, now: 0)
+        #expect(d.panel.frame == home)
+    }
+
+    @Test func showsHoldOptionHintWhenUserKeepsReaching() {
+        let d = launch()
+        let home = d.panel.frame
+        for t in [0.0, 1, 2] {
+            d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: false, now: t)
+            d.tick(cursor: far, optionHeld: false, now: t + 0.5)
+        }
+        #expect(d.field.stringValue == AppDelegate.reachHint)
+        // Holding Option answers the hint: back to the focus, and the pill stays put under the cursor.
+        d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: true, now: 3)
+        #expect(d.field.stringValue == "Write the memo")
+    }
+
+    @Test func hintCanBeTurnedOff() {
+        let d = launch()
+        defaults.set(false, forKey: Setting.showReachHint)
+        let home = d.panel.frame
+        for t in [0.0, 1, 2] {
+            d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: false, now: t)
+            d.tick(cursor: far, optionHeld: false, now: t + 0.5)
+        }
+        #expect(d.field.stringValue == "Write the memo")
+    }
+
+    @Test func textSizeAndOpacityApplyLive() {
+        let d = launch()
+        let before = d.panel.frame
+        defaults.set(18.0, forKey: Setting.fontSize)
+        defaults.set(0.6, forKey: Setting.opacity)
+        #expect(d.panel.frame.height > before.height)
+        #expect(d.panel.frame.width > before.width)
+        #expect(abs(d.panel.alphaValue - 0.6) < 0.01)
+    }
+
+    @Test func dodgeDistanceApplies() {
+        let d = launch()
+        defaults.set(80.0, forKey: Setting.dodgeDistance)
+        let home = d.panel.frame
+        // 60pt below the pill: outside the default 24pt zone, inside an 80pt one.
+        d.tick(cursor: CGPoint(x: home.midX, y: home.minY - 60), optionHeld: false, now: 0)
+        #expect(d.panel.frame != home)
+    }
+
+    @Test func settingsWindowOpens() {
+        let d = launch()
+        d.openSettings()
+        #expect(d.settingsWindow?.isVisible == true)
+        #expect(d.settingsWindow?.title == "Just This Settings")
+    }
+}
