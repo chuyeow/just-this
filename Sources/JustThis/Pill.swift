@@ -6,16 +6,25 @@ final class PillPanel: NSPanel {
     /// ⌘, from the pill. Menu shortcuts only reach an active app, and macOS often won't activate
     /// a background app, so the (non-activating, but key) pill handles it itself.
     var onSettingsShortcut: () -> Void = {}
+    /// ⌘V / Edit › Paste while not typing in the focus field: paste an image.
+    var onPaste: () -> Void = {}
 
     override var canBecomeKey: Bool { true }
     override func animationResizeTime(_ newFrame: NSRect) -> TimeInterval { 0.12 }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command, event.charactersIgnoringModifiers == "," {
+        let command = event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+        if command, event.charactersIgnoringModifiers == "," {
             onSettingsShortcut()
+            return true
+        }
+        if command, event.charactersIgnoringModifiers == "v", !(firstResponder is NSText) {
+            onPaste()
             return true
         }
         return super.performKeyEquivalent(with: event)
     }
+
+    @objc func paste(_ sender: Any?) { onPaste() }
 }
 
 /// The capsule. Owns clicks (the label never sees them): double-click edits, drag moves,

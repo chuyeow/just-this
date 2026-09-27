@@ -13,6 +13,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     let pill = PillView()
     let dot = NSView()
     let tint = NSView()
+    let card = CardView()
+    let imageView = ImageCardView()
+    /// Where ⌘V reads from. Injected in tests so they never touch the real clipboard.
+    var pasteboard: NSPasteboard = .general
+    private let store: ImageStore
+    private var image: NSImage?
+    /// During a corner drag: the width being shown, and the card's top-left kept fixed.
+    private var liveImageWidth: CGFloat?
+    private var resizeAnchor: CGPoint?
+    /// Drag pasteboard change count when no mouse button was down; a change while the button is
+    /// down means something (like a file) is being dragged, so the card holds still to be dropped on.
+    private var idleDragCount = NSPasteboard(name: .drag).changeCount
+    private var ignoreDefaultsChanges = false
     private let menu = NSMenu()
     private var home: CGRect = .zero
     private var target: CGRect = .zero
@@ -24,8 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     /// Injected so tests don't depend on the machine's Reduce Motion setting (CI runners have it on).
     var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, storage: URL = ImageStore.standard) {
         self.defaults = defaults
+        self.store = ImageStore(directory: storage)
         defaults.register(defaults: Setting.defaults)
     }
 
@@ -38,10 +52,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         buildMenu()
         buildMainMenu()
         buildPanel()
+        image = store.load().flatMap(NSImage.init(data:))
+        quietly { defaults.set(image != nil, forKey: Setting.hasImage) }
         applySettings()
         panel.orderFrontRegardless()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: defaults, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applySettings() }
+            MainActor.assumeIsolated {
+                guard let self, !self.ignoreDefaultsChanges else { return }
+                self.applySettings()
+            }
         }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applySettings() }
@@ -52,8 +71,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         // ponytail: 60 Hz cursor poll; a global mouseMoved monitor is the upgrade if this ever shows in Activity Monitor.
         timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.tick(cursor: NSEvent.mouseLocation, optionHeld: NSEvent.modifierFlags.contains(.option),
-                           now: ProcessInfo.processInfo.systemUptime)
+                guard let self else { return }
+                let dragCount = NSPasteboard(name: .drag).changeCount
+                let buttonDown = NSEvent.pressedMouseButtons & 1 != 0
+                if !buttonDown { self.idleDragCount = dragCount }
+                self.tick(cursor: NSEvent.mouseLocation, optionHeld: NSEvent.modifierFlags.contains(.option),
+                          fileDragging: buttonDown && dragCount != self.idleDragCount,
+                          now: ProcessInfo.processInfo.systemUptime)
             }
         }
     }
@@ -63,6 +87,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private func buildMenu() {
         menu.addItem(withTitle: "Edit Focus…", action: #selector(beginEditing), keyEquivalent: "e").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Paste Image", action: #selector(pasteFromClipboard), keyEquivalent: "v").target = self
+        menu.addItem(withTitle: "Remove Image", action: #selector(removeImage), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Just This", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
@@ -101,6 +128,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let dock = NSMenu()
         dock.addItem(withTitle: "Edit Focus…", action: #selector(beginEditing), keyEquivalent: "").target = self
         dock.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
+        dock.addItem(withTitle: "Paste Image", action: #selector(pasteFromClipboard), keyEquivalent: "").target = self
+        if image != nil { dock.addItem(withTitle: "Remove Image", action: #selector(removeImage), keyEquivalent: "").target = self }
         return dock
     }
 
@@ -159,14 +188,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         pill.onDoubleClick = { [weak self] in self?.beginEditing() }
         pill.onMoved = { [weak self] in self?.saveHome() }
         panel.onSettingsShortcut = { [weak self] in self?.openSettings() }
-        panel.contentView = pill
-        tint.frame = pill.bounds
+        panel.onPaste = { [weak self] in self?.pasteFromClipboard() }
+
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.animates = true
+        imageView.isEditable = false
+        imageView.wantsLayer = true
+        imageView.layer?.cornerRadius = 12
+        imageView.layer?.cornerCurve = .continuous
+        imageView.layer?.masksToBounds = true
+        imageView.layer?.borderWidth = 1
+        imageView.menu = menu
+        imageView.isHidden = true
+        imageView.onMoved = { [weak self] in self?.saveHome() }
+        imageView.onResize = { [weak self] width, done in self?.resizeImage(to: width, done: done) }
+
+        card.onDrop = { [weak self] board in Task { await self?.pasteImage(from: board) } }
+        card.addSubview(pill)
+        card.addSubview(imageView)
+        panel.contentView = card
     }
 
     @objc func openSettings() {
         if settingsWindow == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView:
-                SettingsView(resetPosition: { [weak self] in self?.resetPosition() }).defaultAppStorage(defaults)))
+                SettingsView(resetPosition: { [weak self] in self?.resetPosition() },
+                         removeImage: { [weak self] in self?.removeImage() }).defaultAppStorage(defaults)))
             w.title = "Just This Settings"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
@@ -198,6 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         dot.layer?.backgroundColor = accent
         dot.layer?.shadowColor = accent
         pill.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.15).cgColor
+        imageView.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.35).cgColor
     }
 
     /// A slow inhale/exhale, ~10 breaths a minute. The whole pill swells a touch and brightens,
@@ -241,40 +289,131 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         pill.layer?.removeAnimation(forKey: "breathe")
     }
 
-    /// Size the pill to its text and rest it at the saved spot (default: top centre of the main display).
-    /// A dodged pill stays dodged, resized around its own centre.
+    /// Size the pill to its text, put the image (if any) under it, and rest the card at the saved
+    /// spot (default: top centre of the main display). A dodged card stays dodged, resized around
+    /// its own centre; a card being corner-resized keeps its top-left.
     private func layout() {
         let font = field.font!
         let text = (field.stringValue as NSString).size(withAttributes: [.font: font])
         let height = ceil(font.pointSize + 15)
-        let size = CGSize(width: min(max(text.width + 50, 120), 560), height: height)
+        let pillSize = CGSize(width: min(max(text.width + 50, 120), 560), height: height)
         pill.layer?.cornerRadius = height / 2
 
-        let wasDodged = target != home
+        let width = liveImageWidth ?? defaults.double(forKey: Setting.imageWidth)
+        let imageSize = image.map { ImageSizing.size(natural: $0.size, width: width) }
+        let card = cardLayout(pill: pillSize, image: imageSize, gap: 6)
+        pill.frame = card.pill
+        tint.frame = pill.bounds
+        imageView.image = image
+        imageView.isHidden = card.image == nil
+        imageView.frame = card.image ?? .zero
+        let size = card.size
+
         let screens = NSScreen.screens.map(\.frame)
-        let center: CGPoint
-        if let saved = defaults.array(forKey: Setting.home) as? [Double], saved.count == 2 {
-            center = CGPoint(x: saved[0], y: saved[1])
+        if let anchor = resizeAnchor {
+            home = CGRect(x: anchor.x, y: anchor.y - size.height, width: size.width, height: size.height)
+            target = home
         } else {
-            let vf = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
-            center = CGPoint(x: vf.midX, y: vf.maxY - 10 - height / 2)
+            let wasDodged = target != home
+            let center: CGPoint
+            if let saved = defaults.array(forKey: Setting.home) as? [Double], saved.count == 2 {
+                center = CGPoint(x: saved[0], y: saved[1])
+            } else {
+                let vf = (NSScreen.main ?? NSScreen.screens[0]).visibleFrame
+                center = CGPoint(x: vf.midX, y: vf.maxY - 10 - size.height / 2)
+            }
+            home = placeHome(center: center, size: size, screens: screens)
+            target = wasDodged ? placeHome(center: CGPoint(x: target.midX, y: target.midY), size: size, screens: screens) : home
         }
-        home = placeHome(center: center, size: size, screens: screens)
-        target = wasDodged ? placeHome(center: CGPoint(x: target.midX, y: target.midY), size: size, screens: screens) : home
         panel.setFrame(target, display: true)
         pill.layoutSubtreeIfNeeded()
+        imageView.window?.invalidateCursorRects(for: imageView)
         updateBreathing()
+    }
+
+    // MARK: Image
+
+    @objc func pasteFromClipboard() {
+        Task { await pasteImage(from: pasteboard) }
+    }
+
+    /// Paste or drop: a copied/dragged image file, raw image data, or text that is an image URL
+    /// (downloaded). Returns whether an image was set.
+    @discardableResult
+    func pasteImage(from board: NSPasteboard) async -> Bool {
+        guard let data = await imageData(from: board), setImage(data) else {
+            showMessage("That’s not an image I can show")
+            return false
+        }
+        return true
+    }
+
+    private func imageData(from board: NSPasteboard) async -> Data? {
+        // File URLs first: Finder also puts the file's icon on the pasteboard as image data.
+        if let files = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           let file = files.first {
+            return try? Data(contentsOf: file)
+        }
+        let imageTypes: [NSPasteboard.PasteboardType] = [.png, .tiff, .init("public.jpeg"), .init("com.compuserve.gif"), .init("public.heic")]
+        for type in imageTypes {
+            if let data = board.data(forType: type) { return data }
+        }
+        guard let text = board.string(forType: .string) ?? board.string(forType: .URL),
+              let url = imageURL(fromPasted: text) else { return nil }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        // ponytail: whole-body download capped after the fact; stream with a byte limit if huge URLs become a problem.
+        guard let (data, _) = try? await URLSession.shared.data(for: request), data.count <= 25_000_000 else { return nil }
+        return data
+    }
+
+    private func setImage(_ data: Data) -> Bool {
+        guard let new = NSImage(data: data), new.isValid, new.size.width > 0, new.size.height > 0 else { return false }
+        do { try store.save(data) } catch { return false }
+        image = new
+        quietly { defaults.set(true, forKey: Setting.hasImage) }
+        layout()
+        return true
+    }
+
+    @objc func removeImage() {
+        store.remove()
+        image = nil
+        quietly { defaults.set(false, forKey: Setting.hasImage) }
+        layout()
+    }
+
+    /// Live corner drag: grow/shrink from the fixed top-left; on release, save width and spot together.
+    private func resizeImage(to width: CGFloat, done: Bool) {
+        if resizeAnchor == nil { resizeAnchor = CGPoint(x: panel.frame.minX, y: panel.frame.maxY) }
+        liveImageWidth = min(max(width, ImageSizing.minWidth), ImageSizing.maxWidth)
+        layout()
+        guard done else { return }
+        quietly {
+            defaults.set(Double(liveImageWidth!), forKey: Setting.imageWidth)
+            defaults.set([panel.frame.midX, panel.frame.midY], forKey: Setting.home)
+        }
+        liveImageWidth = nil
+        resizeAnchor = nil
+        layout()
+    }
+
+    /// Write several defaults without the change observer laying out between writes.
+    private func quietly(_ writes: () -> Void) {
+        ignoreDefaultsChanges = true
+        writes()
+        ignoreDefaultsChanges = false
     }
 
     // MARK: Dodge loop
 
-    func tick(cursor: CGPoint, optionHeld: Bool, now: Double) {
-        if pill.isDragging { return }
+    func tick(cursor: CGPoint, optionHeld: Bool, fileDragging: Bool = false, now: Double) {
+        if pill.isDragging || imageView.isDragging { return }
         if let shown = hintShownAt, optionHeld || now - shown > 3 { hideHint() }
 
         let screen = NSScreen.screens.first { $0.frame.contains(CGPoint(x: home.midX, y: home.midY)) } ?? NSScreen.main
         guard let screen else { return }
-        let bypass = editing || optionHeld || !defaults.bool(forKey: Setting.dodgeEnabled)
+        let bypass = editing || optionHeld || fileDragging || !defaults.bool(forKey: Setting.dodgeEnabled)
         let next = nextFrame(home: home, current: target, cursor: cursor, visible: screen.frame,
                              proximity: defaults.double(forKey: Setting.dodgeDistance), bypass: bypass)
         guard next != target else { return }
@@ -286,9 +425,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         }
     }
 
-    private func showHint(at now: Double) {
+    private func showHint(at now: Double) { showMessage(Self.reachHint, at: now) }
+
+    /// Briefly show `text` in the pill instead of the focus (cleared by tick after 3s or on ⌥).
+    private func showMessage(_ text: String, at now: Double = ProcessInfo.processInfo.systemUptime) {
         hintShownAt = now
-        field.stringValue = Self.reachHint
+        field.stringValue = text
         layout()
     }
 
