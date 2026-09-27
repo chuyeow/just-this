@@ -299,7 +299,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let pillSize = CGSize(width: min(max(text.width + 50, 120), 560), height: height)
         pill.layer?.cornerRadius = height / 2
 
-        let width = liveImageWidth ?? defaults.double(forKey: Setting.imageWidth)
+        let width: CGFloat = liveImageWidth ?? CGFloat(defaults.double(forKey: Setting.imageWidth))
         let imageSize = image.map { ImageSizing.size(natural: $0.size, width: width) }
         let card = cardLayout(pill: pillSize, image: imageSize, gap: 6)
         pill.frame = card.pill
