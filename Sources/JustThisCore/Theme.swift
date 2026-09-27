@@ -21,17 +21,20 @@ public struct Theme: Identifiable, Sendable {
 }
 
 public enum Themes {
+    /// First entry is the default.
     public static let all: [Theme] = [
-        Theme(id: "ember", name: "Ember", background: RGB(hex: 0x1C1B1F), text: RGB(hex: 0xFFFFFF), accent: RGB(hex: 0xFF9E1A), isDark: true),
         Theme(id: "paper", name: "Paper", background: RGB(hex: 0xF6F1E7), text: RGB(hex: 0x1F1B16), accent: RGB(hex: 0xD9480F), isDark: false),
+        Theme(id: "ember", name: "Ember", background: RGB(hex: 0x1C1B1F), text: RGB(hex: 0xFFFFFF), accent: RGB(hex: 0xFF9E1A), isDark: true),
         Theme(id: "ocean", name: "Ocean", background: RGB(hex: 0x0E1F3D), text: RGB(hex: 0xE6F0FF), accent: RGB(hex: 0x4FD1FF), isDark: true),
         Theme(id: "forest", name: "Forest", background: RGB(hex: 0x13261C), text: RGB(hex: 0xEAF3E6), accent: RGB(hex: 0x9BE564), isDark: true),
         Theme(id: "rose", name: "Rose", background: RGB(hex: 0x2A1420), text: RGB(hex: 0xFFE8F0), accent: RGB(hex: 0xFF6FA3), isDark: true),
         Theme(id: "mono", name: "Mono", background: RGB(hex: 0x000000), text: RGB(hex: 0xFFFFFF), accent: RGB(hex: 0xFFFFFF), isDark: true),
     ]
 
+    public static var `default`: Theme { all[0] }
+
     public static func named(_ id: String?) -> Theme {
-        all.first { $0.id == id } ?? all[0]
+        all.first { $0.id == id } ?? Self.default
     }
 }
 

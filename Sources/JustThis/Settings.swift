@@ -21,7 +21,7 @@ enum Setting {
         showReachHint: true,
         fontSize: 13.0,
         opacity: 1.0,
-        theme: "ember",
+        theme: Themes.default.id,
         breathe: true,
     ] }
 }
@@ -34,7 +34,7 @@ struct SettingsView: View {
     @AppStorage(Setting.showReachHint) private var showReachHint = true
     @AppStorage(Setting.fontSize) private var fontSize = 13.0
     @AppStorage(Setting.opacity) private var opacity = 1.0
-    @AppStorage(Setting.theme) private var theme = "ember"
+    @AppStorage(Setting.theme) private var theme = Themes.default.id
     @AppStorage(Setting.breathe) private var breathe = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?

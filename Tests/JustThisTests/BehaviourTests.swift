@@ -117,12 +117,17 @@ struct DockThemeBreathTests {
         #expect(actions.contains(#selector(NSApplication.terminate(_:))))
     }
 
+    @Test func freshInstallUsesPaper() {
+        let d = launch()
+        #expect(d.field.textColor == NSColor(Themes.named("paper").text))
+        #expect(d.pill.appearance?.name == .vibrantLight)
+    }
+
     @Test func themeAppliesLive() {
         let d = launch()
-        defaults.set("paper", forKey: Setting.theme)
-        let paper = Themes.named("paper")
-        #expect(d.field.textColor == NSColor(paper.text))
-        #expect(d.pill.appearance?.name == .vibrantLight)
+        defaults.set("ocean", forKey: Setting.theme)
+        #expect(d.field.textColor == NSColor(Themes.named("ocean").text))
+        #expect(d.pill.appearance?.name == .vibrantDark)
     }
 
     @Test func breathesUnlessTurnedOff() {

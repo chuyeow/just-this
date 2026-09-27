@@ -18,10 +18,15 @@ func dotStandsOut(_ t: Theme) {
 @Test func unknownThemeFallsBackToDefault() {
     #expect(Themes.named("nope").id == Themes.all[0].id)
     #expect(Themes.named(nil).id == Themes.all[0].id)
-    #expect(Themes.named("paper").id == "paper")
+    #expect(Themes.named("ocean").id == "ocean")
 }
 
 @Test func contrastMatchesWCAGReference() {
     #expect(abs(contrastRatio(RGB(hex: 0x000000), RGB(hex: 0xFFFFFF)) - 21) < 0.01)
     #expect(abs(contrastRatio(RGB(hex: 0x777777), RGB(hex: 0xFFFFFF)) - 4.48) < 0.01)
+}
+
+@Test func paperIsTheDefault() {
+    #expect(Themes.default.id == "paper")
+    #expect(Themes.named(nil).id == "paper")
 }
