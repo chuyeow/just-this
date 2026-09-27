@@ -20,3 +20,13 @@ scripts/build-app.sh --install  # also copies to /Applications
 ```
 
 Icon: `Resources/AppIcon.png`, generated with `gpt-image-2.5-sunburst`.
+
+## Releases
+
+Every merge to `main` runs the tests, builds a universal `.dmg` and publishes it as a GitHub release (`v1.0.<run>`). PRs run the tests.
+
+The app is ad-hoc signed, not notarized. After installing from a downloaded `.dmg`, right-click the app › Open once, or:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Just This.app"
+```
