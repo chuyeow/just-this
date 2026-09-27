@@ -10,7 +10,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private(set) var panel: PillPanel!
     private(set) var settingsWindow: NSWindow?
     let field = NSTextField(labelWithString: "")
-    private var statusItem: NSStatusItem!
+    let pill = PillView()
+    let dot = NSView()
+    private let tint = NSView()
     private let menu = NSMenu()
     private var home: CGRect = .zero
     private var target: CGRect = .zero
@@ -31,11 +33,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     func applicationDidFinishLaunching(_ note: Notification) {
         buildMenu()
+        buildMainMenu()
         buildPanel()
-        buildStatusItem()
         applySettings()
         panel.orderFrontRegardless()
         NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: defaults, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applySettings() }
+        }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.applySettings() }
         }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -59,6 +64,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         menu.addItem(withTitle: "Quit Just This", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
     }
 
+    /// The menu bar menus shown while the app is active. Edit is what makes ⌘C/⌘V/⌘A work in the field.
+    private func buildMainMenu() {
+        let main = NSMenu()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Hide Just This", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit Just This", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Edit Focus…", action: #selector(beginEditing), keyEquivalent: "e").target = self
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        for sub in [appMenu, edit] {
+            let item = NSMenuItem()
+            item.submenu = sub
+            main.addItem(item)
+        }
+        NSApp.mainMenu = main
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let dock = NSMenu()
+        dock.addItem(withTitle: "Edit Focus…", action: #selector(beginEditing), keyEquivalent: "").target = self
+        dock.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: "").target = self
+        return dock
+    }
+
+    /// Clicking the Dock icon goes straight to changing the focus.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        beginEditing()
+        return false
+    }
+
     private func buildPanel() {
         panel = PillPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .statusBar
@@ -69,27 +113,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         panel.hidesOnDeactivate = false
         panel.canHide = false // NSApp.hide after editing returns focus; the pill stays
 
-        let pill = PillView()
         pill.material = .hudWindow
-        pill.appearance = NSAppearance(named: .vibrantDark)
         pill.state = .active
         pill.blendingMode = .behindWindow
         pill.wantsLayer = true
         pill.layer?.cornerCurve = .continuous
-        pill.layer?.borderWidth = 0.5
-        pill.layer?.borderColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        pill.layer?.masksToBounds = true
+        pill.layer?.borderWidth = 1
         pill.menu = menu
 
-        let dot = NSView()
+        tint.wantsLayer = true
+        tint.autoresizingMask = [.width, .height]
+        pill.addSubview(tint)
+
         dot.wantsLayer = true
-        dot.layer?.backgroundColor = NSColor(srgbRed: 1, green: 0.62, blue: 0.1, alpha: 1).cgColor
         dot.layer?.cornerRadius = 4
-        dot.layer?.shadowColor = dot.layer?.backgroundColor
         dot.layer?.shadowOpacity = 0.9
         dot.layer?.shadowRadius = 4
         dot.layer?.shadowOffset = .zero
 
-        field.textColor = .white
         field.lineBreakMode = .byTruncatingTail
         field.focusRingType = .none
         field.delegate = self
@@ -109,12 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         pill.onDoubleClick = { [weak self] in self?.beginEditing() }
         pill.onMoved = { [weak self] in self?.saveHome() }
         panel.contentView = pill
-    }
-
-    private func buildStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "smallcircle.filled.circle", accessibilityDescription: "Just This")
-        statusItem.menu = menu
+        tint.frame = pill.bounds
     }
 
     @objc func openSettings() {
@@ -135,7 +172,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let size = defaults.double(forKey: Setting.fontSize)
         field.font = NSFont(descriptor: NSFont.systemFont(ofSize: size, weight: .medium).fontDescriptor.withDesign(.rounded)!, size: size)
         panel.alphaValue = defaults.double(forKey: Setting.opacity)
+        applyTheme(Themes.named(defaults.string(forKey: Setting.theme)))
         layout()
+    }
+
+    private func applyTheme(_ t: Theme) {
+        pill.appearance = NSAppearance(named: t.isDark ? .vibrantDark : .vibrantLight)
+        tint.layer?.backgroundColor = NSColor(t.background).withAlphaComponent(0.82).cgColor
+        field.textColor = NSColor(t.text)
+        let accent = NSColor(t.accent).cgColor
+        dot.layer?.backgroundColor = accent
+        dot.layer?.shadowColor = accent
+        pill.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.15).cgColor
+
+        let calm = defaults.bool(forKey: Setting.breathe) && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        calm ? breathe(accent: NSColor(t.accent)) : stopBreathing()
+    }
+
+    /// A slow inhale/exhale: the dot's glow swells and the rim warms, ~10 breaths a minute.
+    private func breathe(accent: NSColor) {
+        func wave(_ key: String, _ from: Any, _ to: Any) -> CABasicAnimation {
+            let a = CABasicAnimation(keyPath: key)
+            a.fromValue = from
+            a.toValue = to
+            return a
+        }
+        let dotBreath = CAAnimationGroup()
+        dotBreath.animations = [wave("opacity", 0.55, 1.0), wave("shadowRadius", 1.0, 8.0), wave("shadowOpacity", 0.4, 1.0)]
+        let rim = wave("borderColor", accent.withAlphaComponent(0.08).cgColor, accent.withAlphaComponent(0.5).cgColor)
+        for (layer, anim) in [(dot.layer, dotBreath as CAAnimation), (pill.layer, rim)] {
+            anim.duration = 3
+            anim.autoreverses = true
+            anim.repeatCount = .infinity
+            anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            anim.isRemovedOnCompletion = false
+            layer?.add(anim, forKey: "breathe")
+        }
+    }
+
+    private func stopBreathing() {
+        dot.layer?.removeAnimation(forKey: "breathe")
+        pill.layer?.removeAnimation(forKey: "breathe")
     }
 
     /// Size the pill to its text and rest it at the saved spot (default: top centre of the main display).
@@ -145,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         let text = (field.stringValue as NSString).size(withAttributes: [.font: font])
         let height = ceil(font.pointSize + 15)
         let size = CGSize(width: min(max(text.width + 50, 120), 560), height: height)
-        panel.contentView?.layer?.cornerRadius = height / 2
+        pill.layer?.cornerRadius = height / 2
 
         let wasDodged = target != home
         let screens = NSScreen.screens.map(\.frame)
@@ -206,7 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     @objc func beginEditing() {
         if hintShownAt != nil { hideHint() }
         editing = true
-        (panel.contentView as? PillView)?.isEditing = true
+        pill.isEditing = true
         field.isEditable = true
         field.isSelectable = true
         NSApp.activate(ignoringOtherApps: true)
@@ -218,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private func endEditing(commit: Bool) {
         guard editing else { return }
         editing = false
-        (panel.contentView as? PillView)?.isEditing = false
+        pill.isEditing = false
         let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         if commit && !text.isEmpty { focus = text }
         field.stringValue = focus

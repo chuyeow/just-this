@@ -1,4 +1,5 @@
 import AppKit
+import JustThisCore
 
 /// Borderless panel that floats above everything, on every Space, including full-screen apps.
 final class PillPanel: NSPanel {
@@ -25,4 +26,8 @@ final class PillView: NSVisualEffectView {
     override func rightMouseDown(with event: NSEvent) {
         if let menu { NSMenu.popUpContextMenu(menu, with: event, for: self) }
     }
+}
+
+extension NSColor {
+    convenience init(_ c: RGB) { self.init(srgbRed: c.r, green: c.g, blue: c.b, alpha: 1) }
 }

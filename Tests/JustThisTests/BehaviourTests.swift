@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 @testable import JustThis
+import JustThisCore
 
 /// Drives the real shell's tick with a fake cursor/clock, and settings through UserDefaults.
 @MainActor
@@ -82,5 +83,52 @@ struct BehaviourTests {
         d.openSettings()
         #expect(d.settingsWindow?.isVisible == true)
         #expect(d.settingsWindow?.title == "Just This Settings")
+    }
+}
+
+@MainActor
+struct DockThemeBreathTests {
+    let defaults = UserDefaults(suiteName: "JustThisTests-\(UUID())")!
+    let app = NSApplication.shared
+
+    func launch() -> AppDelegate {
+        let d = AppDelegate(defaults: defaults)
+        d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        return d
+    }
+
+    @Test func dockMenuOffersEditAndSettings() {
+        let d = launch()
+        let titles = d.applicationDockMenu(app)?.items.map(\.title) ?? []
+        #expect(titles.contains("Edit Focus…"))
+        #expect(titles.contains("Settings…"))
+    }
+
+    @Test func clickingDockIconStartsEditing() {
+        let d = launch()
+        _ = d.applicationShouldHandleReopen(app, hasVisibleWindows: false)
+        #expect(d.field.isEditable)
+    }
+
+    @Test func mainMenuSupportsPasteWhileEditing() {
+        _ = launch()
+        let actions = app.mainMenu?.items.flatMap { $0.submenu?.items ?? [] }.compactMap(\.action) ?? []
+        #expect(actions.contains(#selector(NSText.paste(_:))))
+        #expect(actions.contains(#selector(NSApplication.terminate(_:))))
+    }
+
+    @Test func themeAppliesLive() {
+        let d = launch()
+        defaults.set("paper", forKey: Setting.theme)
+        let paper = Themes.named("paper")
+        #expect(d.field.textColor == NSColor(paper.text))
+        #expect(d.pill.appearance?.name == .vibrantLight)
+    }
+
+    @Test func breathesUnlessTurnedOff() {
+        let d = launch()
+        #expect(d.dot.layer?.animation(forKey: "breathe") != nil)
+        defaults.set(false, forKey: Setting.breathe)
+        #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
     }
 }

@@ -8,6 +8,6 @@ let package = Package(
         .target(name: "JustThisCore"),
         .executableTarget(name: "JustThis", dependencies: ["JustThisCore"]),
         .testTarget(name: "JustThisCoreTests", dependencies: ["JustThisCore"]),
-        .testTarget(name: "JustThisTests", dependencies: ["JustThis"]),
+        .testTarget(name: "JustThisTests", dependencies: ["JustThis", "JustThisCore"]),
     ]
 )
