@@ -138,24 +138,37 @@ struct DockThemeBreathTests {
     @Test func breathesUnlessTurnedOff() {
         let d = launch()
         #expect(d.dot.layer?.animation(forKey: "breathe") != nil)
-        // The whole pill breathes: it swells gently (scale) and brightens (opacity), not just the dot.
-        let whole = d.pill.layer?.animation(forKey: "breathe") as? CAAnimationGroup
-        let keys = whole?.animations?.compactMap { ($0 as? CAPropertyAnimation)?.keyPath } ?? []
-        #expect(keys.contains("transform"))
-        #expect(keys.contains("opacity"))
+        #expect(d.pill.layer?.animation(forKey: "breathe") != nil) // the whole pill, not just the dot
         defaults.set(false, forKey: Setting.breathe)
-        #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
-        #expect(d.pill.layer?.animation(forKey: "breathe") == nil)
+        for layer in [d.dot.layer, d.pill.layer, d.tint.layer, d.imageView.layer] {
+            #expect(layer?.animation(forKey: "breathe") == nil)
+        }
     }
 
-    @Test func breathIsClearlyVisible() {
+    func keyPaths(_ layer: CALayer?) -> [String] {
+        let group = layer?.animation(forKey: "breathe") as? CAAnimationGroup
+        return group?.animations?.compactMap { ($0 as? CAPropertyAnimation)?.keyPath } ?? []
+    }
+
+    @Test func breathIsColourAndOpacityNotSize() {
         let d = launch()
+        let pill = keyPaths(d.pill.layer)
+        #expect(!pill.contains("transform")) // no swelling
+        #expect(pill.contains("opacity") && pill.contains("borderColor"))
+        #expect(keyPaths(d.tint.layer).contains("colors")) // tint shifts toward the accent
         let group = d.pill.layer?.animation(forKey: "breathe") as? CAAnimationGroup
-        let anims = group?.animations?.compactMap { $0 as? CABasicAnimation } ?? []
-        let scale = (anims.first { $0.keyPath == "transform" }?.fromValue as? NSValue)?.caTransform3DValue.m11 ?? 1
-        let opacity = anims.first { $0.keyPath == "opacity" }?.fromValue as? Double ?? 1
-        #expect(scale <= 0.93) // exhale: pill visibly smaller
-        #expect(opacity <= 0.65) // and visibly dimmer
+        let opacity = group?.animations?.compactMap { $0 as? CABasicAnimation }.first { $0.keyPath == "opacity" }
+        #expect((opacity?.fromValue as? Double ?? 1) <= 0.65) // clearly visible
+    }
+
+    @Test func pastedImageBreathesToo() async {
+        let d = launch()
+        let board = NSPasteboard(name: .init("JustThisTests-\(UUID())"))
+        board.setData(pngData(width: 100, height: 60), forType: .png)
+        #expect(await d.pasteImage(from: board))
+        let image = keyPaths(d.imageView.layer)
+        #expect(image.contains("opacity") && image.contains("borderColor"))
+        #expect(!image.contains("transform"))
     }
 
     @Test func reduceMotionStopsBreathing() {
