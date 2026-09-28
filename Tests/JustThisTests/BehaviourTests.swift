@@ -11,7 +11,7 @@ struct BehaviourTests {
 
     func launch() -> AppDelegate {
         defaults.set("Write the memo", forKey: Setting.focus)
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }
@@ -25,6 +25,16 @@ struct BehaviourTests {
         #expect(d.panel.frame != home)
         d.tick(cursor: far, optionHeld: false, now: 0.5)
         #expect(d.panel.frame == home)
+    }
+
+    @Test func noPollingWhileRestingAtHome() {
+        let d = launch()
+        #expect(!d.isPolling) // idle: no timer, only mouse-moved events wake us
+        let home = d.panel.frame
+        d.tick(cursor: CGPoint(x: home.midX, y: home.midY), optionHeld: false, now: 0)
+        #expect(d.isPolling) // dodged: watch for ⌥ (no event for it without extra permissions)
+        d.tick(cursor: far, optionHeld: false, now: 0.5)
+        #expect(!d.isPolling) // home again: back to idle
     }
 
     @Test func dodgeCanBeTurnedOff() {
@@ -92,7 +102,7 @@ struct DockThemeBreathTests {
     let app = NSApplication.shared
 
     func launch(reduceMotion: Bool = false) -> AppDelegate {
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.reduceMotion = { reduceMotion }
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
@@ -161,7 +171,7 @@ struct DragAndShortcutTests {
     let app = { let a = NSApplication.shared; a.setActivationPolicy(.accessory); return a }()
 
     func launch() -> AppDelegate {
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }

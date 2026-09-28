@@ -2,6 +2,11 @@ import AppKit
 import Testing
 @testable import JustThis
 
+/// A fresh temp folder for the image store, so tests never read or write the real app's data.
+func scratchStorage() -> URL {
+    FileManager.default.temporaryDirectory.appendingPathComponent("JustThisTests-\(UUID())")
+}
+
 /// Drives the real panel + field editor: begin editing, type, then Return / Escape
 /// through the same delegate command path a keyboard uses.
 @MainActor
@@ -10,7 +15,7 @@ struct EditingTests {
     let app = { let a = NSApplication.shared; a.setActivationPolicy(.accessory); return a }()
 
     func launch() -> AppDelegate {
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }
