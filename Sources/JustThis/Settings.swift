@@ -15,6 +15,9 @@ enum Setting {
     static let opacity = "opacity"
     static let theme = "theme"
     static let breathe = "breathe"
+    static let imageWidth = "imageWidth"
+    /// Mirrors whether an image is stored, so the settings view can show its controls.
+    static let hasImage = "hasImage"
 
     static var defaults: [String: Any] { [
         dodgeEnabled: true,
@@ -24,11 +27,14 @@ enum Setting {
         opacity: 1.0,
         theme: Themes.default.id,
         breathe: true,
+        imageWidth: 240.0,
+        hasImage: false,
     ] }
 }
 
 struct SettingsView: View {
     let resetPosition: () -> Void
+    let removeImage: () -> Void
 
     @AppStorage(Setting.dodgeEnabled) private var dodgeEnabled = true
     @AppStorage(Setting.dodgeDistance) private var dodgeDistance = 24.0
@@ -37,6 +43,8 @@ struct SettingsView: View {
     @AppStorage(Setting.opacity) private var opacity = 1.0
     @AppStorage(Setting.theme) private var theme = Themes.default.id
     @AppStorage(Setting.breathe) private var breathe = true
+    @AppStorage(Setting.imageWidth) private var imageWidth = 240.0
+    @AppStorage(Setting.hasImage) private var hasImage = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -78,6 +86,20 @@ struct SettingsView: View {
                         Text("\(Int(opacity * 100))%").monospacedDigit().frame(width: 48, alignment: .trailing)
                     }
                 }
+            }
+
+            Section("Image") {
+                if hasImage {
+                    LabeledContent("Size") {
+                        HStack {
+                            Slider(value: $imageWidth, in: 80...800)
+                            Text("\(Int(imageWidth)) pt").monospacedDigit().frame(width: 48, alignment: .trailing)
+                        }
+                    }
+                    LabeledContent("Current image") { Button("Remove", action: removeImage) }
+                }
+                Text("Drop an image on the pill, or click the pill and press ⌘V to paste an image, a copied image file or an image URL. ⌥-drag the image’s corner to resize.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
 
             Section {

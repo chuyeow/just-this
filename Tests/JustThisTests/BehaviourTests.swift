@@ -197,6 +197,26 @@ struct DragAndShortcutTests {
         #expect(abs(d.panel.frame.midX - drop.x) < 1)
     }
 
+    @Test func clickAsksToActivateButNeverSilentlyTakesKeyboard() {
+        let d = launch()
+        let c = CGPoint(x: d.panel.frame.midX, y: d.panel.frame.midY)
+        d.pill.mouseDown(with: mouse(.leftMouseDown, d, at: c))
+        d.pill.mouseUp(with: mouse(.leftMouseUp, d, at: c))
+        #expect(d.wantsKeyOnActivate)
+        // Keyboard focus only moves once the app is actually active.
+        d.applicationDidBecomeActive(Notification(name: NSApplication.didBecomeActiveNotification))
+        #expect(!d.wantsKeyOnActivate)
+    }
+
+    @Test func draggingDoesNotAskForFocus() {
+        let d = launch()
+        let c = CGPoint(x: d.panel.frame.midX, y: d.panel.frame.midY)
+        d.pill.mouseDown(with: mouse(.leftMouseDown, d, at: c))
+        d.pill.mouseDragged(with: mouse(.leftMouseDragged, d, at: CGPoint(x: c.x - 40, y: c.y - 40)))
+        d.pill.mouseUp(with: mouse(.leftMouseUp, d, at: CGPoint(x: c.x - 40, y: c.y - 40)))
+        #expect(!d.wantsKeyOnActivate)
+    }
+
     @Test func commandCommaOnThePillOpensSettings() {
         let d = launch()
         let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
