@@ -1,6 +1,7 @@
 import AppKit
 import JustThisCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
@@ -26,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     /// down means something (like a file) is being dragged, so the card holds still to be dropped on.
     private var idleDragCount = NSPasteboard(name: .drag).changeCount
     private var ignoreDefaultsChanges = false
+    /// A click on the card asked macOS to activate us; take keyboard focus once it does. Taking key
+    /// without activation would leave the pill silently eating keystrokes meant for the front app.
+    private(set) var wantsKeyOnActivate = false
     private let menu = NSMenu()
     private var home: CGRect = .zero
     private var target: CGRect = .zero
@@ -110,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         edit.addItem(.separator())
         edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Paste", action: #selector(paste(_:)), keyEquivalent: "v").target = self
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         let window = NSMenu(title: "Window")
         window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
@@ -122,6 +126,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
             main.addItem(item)
         }
         NSApp.mainMenu = main
+    }
+
+    /// Clicking the card works like clicking any app's window: activate, then the pill is key so
+    /// ⌘, and ⌘V reach it. Dragging doesn't activate.
+    private func requestFocus() {
+        wantsKeyOnActivate = true
+        NSApp.activate()
+    }
+
+    func applicationDidBecomeActive(_ note: Notification) {
+        guard wantsKeyOnActivate else { return }
+        wantsKeyOnActivate = false
+        panel.makeKey()
     }
 
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
@@ -187,8 +204,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         ])
         pill.onDoubleClick = { [weak self] in self?.beginEditing() }
         pill.onMoved = { [weak self] in self?.saveHome() }
+        pill.onClick = { [weak self] in self?.requestFocus() }
         panel.onSettingsShortcut = { [weak self] in self?.openSettings() }
-        panel.onPaste = { [weak self] in self?.pasteFromClipboard() }
+        panel.onPaste = { [weak self] editingText in self?.handlePaste(editingText: editingText) ?? false }
 
         imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.animates = true
@@ -201,6 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         imageView.menu = menu
         imageView.isHidden = true
         imageView.onMoved = { [weak self] in self?.saveHome() }
+        imageView.onClick = { [weak self] in self?.requestFocus() }
         imageView.onResize = { [weak self] width, done in self?.resizeImage(to: width, done: done) }
 
         card.onDrop = { [weak self] board in Task { await self?.pasteImage(from: board) } }
@@ -335,6 +354,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     @objc func pasteFromClipboard() {
         Task { await pasteImage(from: pasteboard) }
+    }
+
+    /// ⌘V: outside the text field it always means "paste an image". While editing the focus text,
+    /// an image-only clipboard (image data or a copied image file) still pastes the image; anything
+    /// with plain text is left to the field.
+    func handlePaste(editingText: Bool) -> Bool {
+        guard !editingText || clipboardHoldsOnlyImage(pasteboard) else { return false }
+        pasteFromClipboard()
+        return true
+    }
+
+    /// Edit › Paste: same decision as ⌘V, falling back to the text field's own paste.
+    @objc func paste(_ sender: Any?) {
+        let editingText = panel.firstResponder is NSText
+        if !handlePaste(editingText: editingText), editingText {
+            (panel.firstResponder as? NSText)?.paste(sender)
+        }
+    }
+
+    private func clipboardHoldsOnlyImage(_ board: NSPasteboard) -> Bool {
+        if let files = board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           let file = files.first {
+            return UTType(filenameExtension: file.pathExtension)?.conforms(to: .image) == true
+        }
+        let hasImage = board.availableType(from: [.png, .tiff, .init("public.jpeg"), .init("com.compuserve.gif"), .init("public.heic")]) != nil
+        return hasImage && board.string(forType: .string) == nil
     }
 
     /// Paste or drop: a copied/dragged image file, raw image data, or text that is an image URL

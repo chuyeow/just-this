@@ -21,10 +21,12 @@ final class CardView: NSView {
 final class ImageCardView: NSImageView {
     var onResize: (_ width: CGFloat, _ done: Bool) -> Void = { _, _ in }
     var onMoved: () -> Void = {}
+    var onClick: () -> Void = {}
     static let grip: CGFloat = 16
 
     private enum Gesture { case resize(startWidth: CGFloat, startX: CGFloat), move(grab: CGPoint) }
     private var gesture: Gesture?
+    private var moved = false
     var isDragging: Bool { gesture != nil }
 
     private var gripRect: NSRect { NSRect(x: bounds.maxX - Self.grip, y: bounds.minY, width: Self.grip, height: Self.grip) }
@@ -32,7 +34,7 @@ final class ImageCardView: NSImageView {
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     override func mouseDown(with event: NSEvent) {
-        window?.makeKey()
+        moved = false
         let p = convert(event.locationInWindow, from: nil)
         let screenX = window?.convertPoint(toScreen: event.locationInWindow).x ?? 0
         gesture = gripRect.contains(p) ? .resize(startWidth: bounds.width, startX: screenX) : .move(grab: event.locationInWindow)
@@ -40,6 +42,7 @@ final class ImageCardView: NSImageView {
 
     override func mouseDragged(with event: NSEvent) {
         guard let window, let gesture else { return }
+        moved = true
         let cursor = window.convertPoint(toScreen: event.locationInWindow)
         switch gesture {
         case let .resize(startWidth, startX): onResize(startWidth + cursor.x - startX, false)
@@ -52,7 +55,7 @@ final class ImageCardView: NSImageView {
         self.gesture = nil
         switch gesture {
         case .resize: onResize(bounds.width, true)
-        case .move: onMoved()
+        case .move: moved ? onMoved() : onClick()
         }
     }
 

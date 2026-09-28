@@ -143,3 +143,42 @@ struct ImageCardTests {
         #expect(d.panel.frame == home)
     }
 }
+
+@MainActor
+struct PasteWhileEditingTests {
+    let defaults = UserDefaults(suiteName: "JustThisTests-\(UUID())")!
+    let storage = FileManager.default.temporaryDirectory.appendingPathComponent("JustThisTests-\(UUID())")
+    let board = NSPasteboard(name: NSPasteboard.Name("JustThisTests-\(UUID())"))
+    let app = { let a = NSApplication.shared; a.setActivationPolicy(.accessory); return a }()
+
+    func launchEditing() -> AppDelegate {
+        let d = AppDelegate(defaults: defaults, storage: storage)
+        d.pasteboard = board
+        d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
+        d.beginEditing() // focus text selected, like double-clicking the pill
+        return d
+    }
+
+    var commandV: NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: 0,
+                         context: nil, characters: "v", charactersIgnoringModifiers: "v", isARepeat: false, keyCode: 9)!
+    }
+
+    @Test func imageOnClipboardPastesAsImageEvenWhileEditing() async {
+        let d = launchEditing()
+        board.clearContents()
+        board.setData(pngData(width: 80, height: 40), forType: .png)
+        #expect(d.panel.performKeyEquivalent(with: commandV))
+        for _ in 0..<50 where d.imageView.isHidden { try? await Task.sleep(for: .milliseconds(20)) }
+        #expect(!d.imageView.isHidden)
+    }
+
+    @Test func textOnClipboardStillPastesAsTextWhileEditing() async {
+        let d = launchEditing()
+        board.clearContents()
+        board.setString("https://example.com/cat.png", forType: .string)
+        #expect(!d.panel.performKeyEquivalent(with: commandV)) // left to the text field
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(d.imageView.isHidden)
+    }
+}
