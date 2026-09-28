@@ -268,33 +268,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         imageView.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.35).cgColor
     }
 
-    /// A slow inhale/exhale, ~10 breaths a minute. The whole pill swells a touch and brightens,
-    /// the dot's glow blooms and the rim warms. Scale never exceeds 1 so the window never clips it.
-    /// Re-run after every layout: the scale pivots on the pill's centre, which moves with its size.
+    /// A slow inhale/exhale, ~10 breaths a minute, in colour and light only (nothing changes size):
+    /// the pill brightens from 60% while its tint warms toward the theme accent, the rim and the
+    /// dot's glow light up, and a pasted image brightens with an accent glow around it.
     private func updateBreathing() {
         stopBreathing()
         guard defaults.bool(forKey: Setting.breathe), !reduceMotion() else { return }
-        let accent = NSColor(Themes.named(defaults.string(forKey: Setting.theme)).accent)
+        let theme = Themes.named(defaults.string(forKey: Setting.theme))
+        let accent = NSColor(theme.accent)
         func wave(_ key: String, _ from: Any, _ to: Any) -> CABasicAnimation {
             let a = CABasicAnimation(keyPath: key)
             a.fromValue = from
             a.toValue = to
             return a
         }
-        let b = pill.bounds
-        var exhale = CATransform3DMakeTranslation(b.midX, b.midY, 0)
-        exhale = CATransform3DScale(exhale, 0.965, 0.965, 1)
-        exhale = CATransform3DTranslate(exhale, -b.midX, -b.midY, 0)
+        func group(_ animations: [CAAnimation]) -> CAAnimationGroup {
+            let g = CAAnimationGroup()
+            g.animations = animations
+            return g
+        }
+        let tintStops = [theme.background, theme.backgroundEnd ?? theme.background].map { NSColor($0) }
+        let restTint = tintStops.map { $0.withAlphaComponent(0.82).cgColor }
+        let warmTint = tintStops.map { ($0.blended(withFraction: 0.35, of: accent) ?? $0).withAlphaComponent(0.82).cgColor }
 
-        let dotBreath = CAAnimationGroup()
-        dotBreath.animations = [wave("opacity", 0.55, 1.0), wave("shadowRadius", 1.0, 8.0), wave("shadowOpacity", 0.4, 1.0)]
-        let pillBreath = CAAnimationGroup()
-        pillBreath.animations = [
-            wave("transform", NSValue(caTransform3D: exhale), NSValue(caTransform3D: CATransform3DIdentity)),
-            wave("opacity", 0.8, 1.0),
-            wave("borderColor", accent.withAlphaComponent(0.08).cgColor, accent.withAlphaComponent(0.5).cgColor),
+        let breaths: [(CALayer?, CAAnimationGroup)] = [
+            (pill.layer, group([
+                wave("opacity", 0.6, 1.0),
+                wave("borderColor", accent.withAlphaComponent(0.05).cgColor, accent.withAlphaComponent(0.9).cgColor),
+                wave("borderWidth", 1.0, 2.0),
+            ])),
+            (tint.layer, group([wave("colors", restTint, warmTint)])),
+            (dot.layer, group([wave("opacity", 0.4, 1.0), wave("shadowRadius", 1.0, 14.0), wave("shadowOpacity", 0.3, 1.0)])),
+            (imageView.layer, group([
+                wave("opacity", 0.65, 1.0),
+                wave("borderColor", accent.withAlphaComponent(0.1).cgColor, accent.withAlphaComponent(0.9).cgColor),
+                wave("borderWidth", 1.0, 2.5),
+            ])),
         ]
-        for (layer, anim) in [(dot.layer, dotBreath), (pill.layer, pillBreath)] {
+        for (layer, anim) in breaths {
             anim.duration = 3
             anim.autoreverses = true
             anim.repeatCount = .infinity
@@ -305,8 +316,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     }
 
     private func stopBreathing() {
-        dot.layer?.removeAnimation(forKey: "breathe")
-        pill.layer?.removeAnimation(forKey: "breathe")
+        for layer in [dot.layer, pill.layer, tint.layer, imageView.layer] {
+            layer?.removeAnimation(forKey: "breathe")
+        }
     }
 
     /// Size the pill to its text, put the image (if any) under it, and rest the card at the saved

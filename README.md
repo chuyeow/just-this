@@ -6,7 +6,7 @@ A tiny pill that floats above every window, on every Space, showing your one cur
 - **Out of the way**: move the cursor near it and it slides aside so you can reach what's underneath. It comes back when the cursor leaves.
 - **Hold ⌥** to stop it dodging, so you can double-click, drag or right-click it. Keep reaching without ⌥ and it tells you: "Hold ⌥ Option key to reach".
 - **Rest anywhere**: ⌥-drag it to any spot on any display; it stays there across launches and is pulled back on-screen if a display goes away.
-- **Breathes**: the whole pill swells and brightens slowly, the dot's glow blooming with it (~10 breaths a minute). Off in Settings, and automatically under Reduce Motion.
+- **Breathes**: in colour and light, not size: the pill brightens and its tint warms toward the theme accent, the rim and dot glow light up, and a pasted image brightens with an accent glow (~10 breaths a minute). Off in Settings, and automatically under Reduce Motion.
 - **Themes**: Dawn (default, apricot-to-lilac gradient), Paper, Ember, Ocean, Forest, Gold (black and gold). Every theme is tested for readable contrast (WCAG 4.5:1 text, 3:1 dot).
 - **Image**: drop an image file on the pill, or click the pill (or double-click to edit) and press ⌘V to paste an image, a copied image file or an image URL (downloaded). ⌥-drag the image's bottom-right corner to resize (aspect kept), or use Settings. Right-click › Remove Image.
 - **Settings** (⌘, after clicking the pill or while the app is in front; or Dock/right-click › Settings…): theme, breathing, slide-away on/off and distance, the hint on/off, text size, opacity, reset position, open at login.
