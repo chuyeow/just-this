@@ -37,6 +37,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
     private var reach = ReachTracker()
     private var hintShownAt: Double?
     private var timer: Timer?
+    private var monitors: [Any] = []
+    /// True while the ⌥/hint poll runs: only when the card is away from home or showing a message.
+    var isPolling: Bool { timer != nil }
 
     /// Injected so tests don't depend on the machine's Reduce Motion setting (CI runners have it on).
     var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
@@ -72,18 +75,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.layout() }
         }
-        // ponytail: 60 Hz cursor poll; a global mouseMoved monitor is the upgrade if this ever shows in Activity Monitor.
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let dragCount = NSPasteboard(name: .drag).changeCount
-                let buttonDown = NSEvent.pressedMouseButtons & 1 != 0
-                if !buttonDown { self.idleDragCount = dragCount }
-                self.tick(cursor: NSEvent.mouseLocation, optionHeld: NSEvent.modifierFlags.contains(.option),
-                          fileDragging: buttonDown && dragCount != self.idleDragCount,
-                          now: ProcessInfo.processInfo.systemUptime)
-            }
-        }
+        // Event-driven: the dodge only runs when the mouse moves (here or in any other app). Global
+        // mouse monitors need no permission; key/modifier monitors would, hence the ⌥ poll below.
+        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .leftMouseDown, .leftMouseUp]
+        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
+            MainActor.assumeIsolated { self?.sample() }
+        }) { monitors.append(global) }
+        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
+            MainActor.assumeIsolated { self?.sample() }
+            return event
+        }) { monitors.append(local) }
     }
 
     // MARK: UI
@@ -452,7 +453,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
 
     // MARK: Dodge loop
 
+    /// Read the live cursor, modifier and drag state and run the dodge once.
+    private func sample() {
+        let dragCount = NSPasteboard(name: .drag).changeCount
+        let buttonDown = NSEvent.pressedMouseButtons & 1 != 0
+        if !buttonDown { idleDragCount = dragCount }
+        tick(cursor: NSEvent.mouseLocation, optionHeld: NSEvent.modifierFlags.contains(.option),
+             fileDragging: buttonDown && dragCount != idleDragCount, now: ProcessInfo.processInfo.systemUptime)
+    }
+
+    /// Pressing ⌥ or a message timing out produce no mouse event, so poll (10 Hz) only while one of
+    /// those can matter: the card is dodged, or a message is showing. Idle at home: no timer at all.
+    private func updatePolling() {
+        let needed = target != home || hintShownAt != nil
+        if needed, timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.sample() }
+            }
+        } else if !needed {
+            timer?.invalidate()
+            timer = nil
+        }
+    }
+
     func tick(cursor: CGPoint, optionHeld: Bool, fileDragging: Bool = false, now: Double) {
+        defer { updatePolling() }
         if pill.isDragging || imageView.isDragging { return }
         if let shown = hintShownAt, optionHeld || now - shown > 3 { hideHint() }
 
@@ -477,6 +502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         hintShownAt = now
         field.stringValue = text
         layout()
+        updatePolling()
     }
 
     private func hideHint() {
