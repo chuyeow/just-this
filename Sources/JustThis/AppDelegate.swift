@@ -267,8 +267,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         imageView.layer?.borderColor = NSColor(t.accent).withAlphaComponent(0.35).cgColor
     }
 
-    /// A slow inhale/exhale, ~10 breaths a minute. The whole pill swells a touch and brightens,
-    /// the dot's glow blooms and the rim warms. Scale never exceeds 1 so the window never clips it.
+    /// A slow inhale/exhale, ~10 breaths a minute, deep enough to notice from the corner of your eye:
+    /// the whole pill swells from 92% and brightens from 60%, the dot's glow blooms and the rim
+    /// thickens and lights up in the theme's accent. Scale never exceeds 1 so the window never clips it.
     /// Re-run after every layout: the scale pivots on the pill's centre, which moves with its size.
     private func updateBreathing() {
         stopBreathing()
@@ -282,16 +283,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSTextFieldDelegate {
         }
         let b = pill.bounds
         var exhale = CATransform3DMakeTranslation(b.midX, b.midY, 0)
-        exhale = CATransform3DScale(exhale, 0.965, 0.965, 1)
+        exhale = CATransform3DScale(exhale, 0.92, 0.92, 1)
         exhale = CATransform3DTranslate(exhale, -b.midX, -b.midY, 0)
 
         let dotBreath = CAAnimationGroup()
-        dotBreath.animations = [wave("opacity", 0.55, 1.0), wave("shadowRadius", 1.0, 8.0), wave("shadowOpacity", 0.4, 1.0)]
+        dotBreath.animations = [wave("opacity", 0.4, 1.0), wave("shadowRadius", 1.0, 14.0), wave("shadowOpacity", 0.3, 1.0)]
         let pillBreath = CAAnimationGroup()
         pillBreath.animations = [
             wave("transform", NSValue(caTransform3D: exhale), NSValue(caTransform3D: CATransform3DIdentity)),
-            wave("opacity", 0.8, 1.0),
-            wave("borderColor", accent.withAlphaComponent(0.08).cgColor, accent.withAlphaComponent(0.5).cgColor),
+            wave("opacity", 0.6, 1.0),
+            wave("borderColor", accent.withAlphaComponent(0.05).cgColor, accent.withAlphaComponent(0.9).cgColor),
+            wave("borderWidth", 1.0, 2.0),
         ]
         for (layer, anim) in [(dot.layer, dotBreath), (pill.layer, pillBreath)] {
             anim.duration = 3

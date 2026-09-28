@@ -11,7 +11,7 @@ struct BehaviourTests {
 
     func launch() -> AppDelegate {
         defaults.set("Write the memo", forKey: Setting.focus)
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }
@@ -92,7 +92,7 @@ struct DockThemeBreathTests {
     let app = NSApplication.shared
 
     func launch(reduceMotion: Bool = false) -> AppDelegate {
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.reduceMotion = { reduceMotion }
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
@@ -148,6 +148,16 @@ struct DockThemeBreathTests {
         #expect(d.pill.layer?.animation(forKey: "breathe") == nil)
     }
 
+    @Test func breathIsClearlyVisible() {
+        let d = launch()
+        let group = d.pill.layer?.animation(forKey: "breathe") as? CAAnimationGroup
+        let anims = group?.animations?.compactMap { $0 as? CABasicAnimation } ?? []
+        let scale = (anims.first { $0.keyPath == "transform" }?.fromValue as? NSValue)?.caTransform3DValue.m11 ?? 1
+        let opacity = anims.first { $0.keyPath == "opacity" }?.fromValue as? Double ?? 1
+        #expect(scale <= 0.93) // exhale: pill visibly smaller
+        #expect(opacity <= 0.65) // and visibly dimmer
+    }
+
     @Test func reduceMotionStopsBreathing() {
         let d = launch(reduceMotion: true)
         #expect(d.dot.layer?.animation(forKey: "breathe") == nil)
@@ -161,7 +171,7 @@ struct DragAndShortcutTests {
     let app = { let a = NSApplication.shared; a.setActivationPolicy(.accessory); return a }()
 
     func launch() -> AppDelegate {
-        let d = AppDelegate(defaults: defaults)
+        let d = AppDelegate(defaults: defaults, storage: scratchStorage())
         d.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
         return d
     }
